@@ -1,0 +1,71 @@
+{
+  "name": "dpsdesk-agent",
+  "version": "1.0.0",
+  "description": "DPS Desk Agent - Captura de pantalla y control remoto",
+  "main": "main.js",
+  "author": "DPS Desk",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "dev:ui": "cd ../frontend && npm run dev",
+    "prebuild": "cd ../frontend && npm run build:app",
+    "build": "electron-builder --win --x64",
+    "build:portable": "electron-builder --win portable --x64"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "robotjs": "^0.6.0",
+    "uuid": "^9.0.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@electron/packager": "^20.0.0",
+    "@electron/rebuild": "^4.0.4",
+    "electron": "^31.0.0",
+    "electron-builder": "^26.8.1"
+  },
+  "build": {
+    "appId": "cl.dpsdesk.agent",
+    "productName": "DPS Desk",
+    "copyright": "Copyright © 2026 DPS Desk",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "preload-status.js",
+      "renderer.html",
+      "renderer.js",
+      "status.html",
+      "src/**/*",
+      "ui/**/*",
+      ".env",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "artifactName": "DPS Desk Setup ${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "DPS Desk",
+      "runAfterFinish": true
+    },
+    "extraMetadata": {
+      "name": "dps-desk"
+    }
+  }
+}

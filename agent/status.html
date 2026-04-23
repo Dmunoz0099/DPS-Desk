@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>DPS Desk Agent</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: linear-gradient(135deg, #1e1b4b 0%, #0f172a 100%);
+      color: #f1f5f9;
+      padding: 24px;
+      min-height: 100vh;
+      user-select: none;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 24px;
+    }
+    .logo {
+      width: 40px;
+      height: 40px;
+      background: linear-gradient(135deg, #4f46e5, #7c3aed);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+    }
+    .title { font-size: 18px; font-weight: 700; }
+    .subtitle { font-size: 12px; color: #94a3b8; }
+    .status-card {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 16px;
+    }
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 13px;
+    }
+    .status-row:not(:last-child) {
+      border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .label { color: #94a3b8; }
+    .value { color: #f1f5f9; font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge.online { background: rgba(34, 197, 94, 0.15); color: #22c55e; }
+    .badge.offline { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .dot.online { background: #22c55e; box-shadow: 0 0 8px #22c55e; }
+    .dot.offline { background: #ef4444; }
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 16px;
+    }
+    button {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      font-family: inherit;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    .btn-primary { background: linear-gradient(135deg, #4f46e5, #7c3aed); color: #fff; }
+    .btn-secondary { background: rgba(255, 255, 255, 0.1); color: #f1f5f9; }
+    .btn-danger { background: rgba(239, 68, 68, 0.15); color: #ef4444; }
+    .footer {
+      text-align: center;
+      font-size: 11px;
+      color: #64748b;
+      margin-top: 20px;
+    }
+    .pos-id {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 11px;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🖥️</div>
+    <div>
+      <div class="title">DPS Desk Agent</div>
+      <div class="subtitle">Control remoto seguro</div>
+    </div>
+  </div>
+
+  <div class="status-card">
+    <div class="status-row">
+      <span class="label">Estado</span>
+      <span id="status-badge" class="badge offline">
+        <span class="dot offline"></span>
+        Desconectado
+      </span>
+    </div>
+    <div class="status-row">
+      <span class="label">Sesiones activas</span>
+      <span class="value" id="active-sessions">0</span>
+    </div>
+    <div class="status-row">
+      <span class="label">Servidor</span>
+      <span class="value" id="signaling-url">--</span>
+    </div>
+  </div>
+
+  <div class="status-card">
+    <div class="status-row">
+      <span class="label">POS ID</span>
+    </div>
+    <div class="status-row">
+      <span class="value pos-id" id="pos-id">--</span>
+    </div>
+  </div>
+
+  <div class="actions">
+    <button class="btn-primary" id="btn-reconnect">🔄 Reconectar</button>
+    <button class="btn-secondary" id="btn-minimize">─ Minimizar</button>
+  </div>
+
+  <div class="footer">
+    El agent corre en segundo plano.<br>
+    Cierra la ventana para minimizar a la bandeja.
+  </div>
+
+  <script>
+    const statusBadge = document.getElementById('status-badge');
+    const activeSessionsEl = document.getElementById('active-sessions');
+    const signalingUrlEl = document.getElementById('signaling-url');
+    const posIdEl = document.getElementById('pos-id');
+
+    function render(data) {
+      const isOnline = data.connectionStatus === 'connected';
+      statusBadge.className = `badge ${isOnline ? 'online' : 'offline'}`;
+      statusBadge.innerHTML = `<span class="dot ${isOnline ? 'online' : 'offline'}"></span>${isOnline ? 'Conectado' : 'Desconectado'}`;
+      activeSessionsEl.textContent = data.activeSessions || 0;
+      signalingUrlEl.textContent = data.signalingUrl || '--';
+      posIdEl.textContent = data.posId || '--';
+    }
+
+    window.agentStatus.getStatus().then(render);
+    window.agentStatus.onStatusUpdate(render);
+
+    document.getElementById('btn-reconnect').onclick = () => {
+      window.agentStatus.reconnect();
+    };
+    document.getElementById('btn-minimize').onclick = () => {
+      window.close();
+    };
+  </script>
+</body>
+</html>

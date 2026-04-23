@@ -1,0 +1,23 @@
+# DPSDESK — coturn TURN/STUN server for WebRTC
+#
+# Despliegue:
+#   1. Edita coturn/turnserver.conf — cambiar static-auth-secret y coordinar con backend .env
+#   2. Abre puertos en firewall: 3478 TCP/UDP, 5349 TCP/UDP, 49152-65535 UDP (media relay)
+#   3. Ejecuta: docker compose up -d
+#   4. Logs: docker compose logs -f coturn
+#
+# Config:
+#   - HMAC time-limited credentials (coturn lt-cred-mech)
+#   - static-auth-secret DEBE coincidir con TURN_SECRET en backend/.env
+
+version: '3.8'
+
+services:
+  coturn:
+    container_name: dpsdesk-coturn
+    image: coturn/coturn:latest
+    network_mode: host
+    restart: unless-stopped
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    command: -c /etc/coturn/turnserver.conf

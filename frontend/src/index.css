@@ -1,0 +1,30 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply font-sans antialiased bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100;
+}
+
+/* Scrollbar discreto para tema oscuro */
+.dark ::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+.dark ::-webkit-scrollbar-thumb {
+  background: #1f2937;
+  border-radius: 8px;
+}
+.dark ::-webkit-scrollbar-track {
+  background: transparent;
+}

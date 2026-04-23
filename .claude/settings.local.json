@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm install *)",
+      "Bash(npm list *)",
+      "Bash(pkill -f \"nodemon server.js\")",
+      "Bash(pkill -f \"vite\")",
+      "Bash(npm run *)",
+      "Read(//tmp/**)",
+      "Bash(pkill -f node)",
+      "Bash(pkill -f electron)",
+      "Bash(pkill -f \"node.*agent\")",
+      "Bash(timeout 10 npm start)",
+      "Bash(curl -s http://localhost:4000/agents)",
+      "Bash(curl -s http://localhost:4000/agents/isabel-riquelme-pos-real)",
+      "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false WIN_CSC_LINK=\"\" npm run build)",
+      "Bash(unset WIN_CSC_LINK)",
+      "Bash(CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --dir --win)"
+    ]
+  }
+}
