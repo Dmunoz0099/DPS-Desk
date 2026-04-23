@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Builds
+dist/
+build/
+agent/dist/
+agent/ui/
+frontend/dist/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs
+*.log
+npm-debug.log*
+
+# Electron
+out/
+*.exe
+*.dmg
+*.AppImage
+
+# Cache
+.cache/
+.next/
+.turbo/
