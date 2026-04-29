@@ -117,15 +117,36 @@ function Sidebar({ active, onNavigate, collapsed, onToggleCollapse }) {
 }
 
 // ---- TopNav ----
-function TopNav({ title, subtitle, actions, dark, onToggleDark, onLogout }) {
+function TopNav({ title, subtitle, actions, dark, onToggleDark, onLogout, canGoBack, canGoForward, onGoBack, onGoForward }) {
   return (
     <header style={{
-      display: 'flex', alignItems: 'center', gap: 16,
+      display: 'flex', alignItems: 'center', gap: 10,
       padding: '14px 28px',
       borderBottom: '1px solid var(--border)',
       background: 'var(--surface)',
       minHeight: 60,
     }}>
+      {/* Back / Forward */}
+      <div style={{ display: 'flex', gap: 2, marginRight: 4 }}>
+        <button
+          className="btn btn-ghost"
+          style={{ height: 30, width: 30, padding: 0, justifyContent: 'center', opacity: canGoBack ? 1 : 0.35 }}
+          onClick={onGoBack}
+          disabled={!canGoBack}
+          title="Atrás"
+        >
+          <Icon name="chevronL" size={14}/>
+        </button>
+        <button
+          className="btn btn-ghost"
+          style={{ height: 30, width: 30, padding: 0, justifyContent: 'center', opacity: canGoForward ? 1 : 0.35 }}
+          onClick={onGoForward}
+          disabled={!canGoForward}
+          title="Adelante"
+        >
+          <Icon name="chevronR" size={14}/>
+        </button>
+      </div>
       <div style={{ flex: 1 }}>
         <h1 style={{ margin: 0, fontSize: 18, fontWeight: 600, letterSpacing: '-0.015em' }}>{title}</h1>
         {subtitle && <div style={{ fontSize: 12, color: 'var(--fg-muted)', marginTop: 2 }}>{subtitle}</div>}
@@ -141,9 +162,9 @@ function TopNav({ title, subtitle, actions, dark, onToggleDark, onLogout }) {
         </button>
         <div style={{ width: 1, height: 20, background: 'var(--border)', margin: '0 6px' }}/>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 6px 4px 4px', borderRadius: 'var(--radius-sm)' }}>
-          <span className="avatar">SG</span>
+          <span className="avatar">DM</span>
           <div style={{ lineHeight: 1.15 }}>
-            <div style={{ fontSize: 12, fontWeight: 500 }}>Sebastián G.</div>
+            <div style={{ fontSize: 12, fontWeight: 500 }}>Diego M.</div>
             <div style={{ fontSize: 10, color: 'var(--fg-subtle)' }}>Admin · DPS</div>
           </div>
           <button className="btn btn-ghost" style={{ height: 28, width: 28, padding: 0, justifyContent: 'center', marginLeft: 4 }} onClick={onLogout} title="Cerrar sesión">

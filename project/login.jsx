@@ -3,16 +3,31 @@ const { useState } = React;
 
 function LoginScreen({ onLogin, dark, onToggleDark }) {
   const [email, setEmail] = useState('admin@digitalpharma.cl');
-  const [password, setPassword] = useState('••••••••');
+  const [password, setPassword] = useState('admin');
   const [showPwd, setShowPwd] = useState(false);
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [showRegister, setShowRegister] = useState(false);
+  const [error, setError] = useState('');
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e?.preventDefault();
+    setError('');
+    if (!email || !password) {
+      setError('Ingresa usuario y contraseña');
+      return;
+    }
     setLoading(true);
-    setTimeout(() => { setLoading(false); onLogin(); }, 700);
+    try {
+      if (window.API) {
+        await window.API.login(email, password);
+      }
+      onLogin();
+    } catch (err) {
+      setError(err.message || 'No se pudo iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -185,6 +200,18 @@ function LoginScreen({ onLogin, dark, onToggleDark }) {
             </span>
             <span onClick={() => setRemember(r => !r)}>Mantener sesión iniciada</span>
           </label>
+
+          {error && (
+            <div style={{
+              marginBottom: 14,
+              padding: '8px 10px',
+              borderRadius: 6,
+              background: 'var(--err-bg, #fee2e2)',
+              color: 'var(--err, #b91c1c)',
+              fontSize: 12,
+              border: '1px solid color-mix(in oklab, var(--err, #b91c1c) 30%, transparent)',
+            }}>{error}</div>
+          )}
 
           <button type="submit" className="btn btn-primary btn-lg" style={{ width: '100%', justifyContent: 'center' }} disabled={loading}>
             {loading ? <><span className="spinner" style={{ borderTopColor: '#fff' }}/> Verificando…</> : <>Iniciar sesión <Icon name="arrowRt" size={14}/></>}

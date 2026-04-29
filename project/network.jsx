@@ -1,12 +1,17 @@
 /* global React */
 const { useState, useMemo } = React;
 
-function NetworkScreen({ onConnect }) {
+function NetworkScreen({ onConnect, onRefresh }) {
   const { COMPANIES, LOCALES, DEVICES } = window.MOCK;
   const [selectedCompany, setSelectedCompany] = useState(null); // company name
   const [selectedLocal, setSelectedLocal] = useState(null);     // local id
   const [filter, setFilter] = useState('all'); // all | online | offline
   const [search, setSearch] = useState('');
+  const [adding, setAdding] = useState(null); // 'empresa' | 'local' | 'pos' | null
+
+  const currentCompany = selectedCompany ? COMPANIES.find(c => c.name === selectedCompany) : null;
+  const currentLocal = selectedLocal ? LOCALES.find(l => l.id === selectedLocal) : null;
+  const addType = selectedLocal ? 'pos' : selectedCompany ? 'local' : 'empresa';
 
   const breadcrumb = (
     <div className="breadcrumb">
@@ -51,17 +56,20 @@ function NetworkScreen({ onConnect }) {
           />
         </div>
         <button className="btn btn-sm"><Icon name="filter" size={12}/> Filtros</button>
-        <button className="btn btn-sm btn-primary"><Icon name="plus" size={12}/> {selectedLocal ? 'Dispositivo' : selectedCompany ? 'Local' : 'Empresa'}</button>
+        <button className="btn btn-sm btn-primary" onClick={() => setAdding(addType)}>
+          <Icon name="plus" size={12}/> {addType === 'pos' ? 'Dispositivo' : addType === 'local' ? 'Local' : 'Empresa'}
+        </button>
       </div>
 
       {/* CONTENT */}
-      {!selectedCompany && <CompaniesView companies={COMPANIES} locales={LOCALES} onSelect={setSelectedCompany}/>}
+      {!selectedCompany && <CompaniesView companies={COMPANIES} locales={LOCALES} onSelect={setSelectedCompany} onAdd={() => setAdding('empresa')}/>}
       {selectedCompany && !selectedLocal && (
         <LocalesView
           company={selectedCompany}
           locales={LOCALES.filter(l => l.company === selectedCompany)}
           onSelect={setSelectedLocal}
           onBack={() => setSelectedCompany(null)}
+          onAdd={() => setAdding('local')}
         />
       )}
       {selectedLocal && (
@@ -74,14 +82,144 @@ function NetworkScreen({ onConnect }) {
           })}
           filter={filter} setFilter={setFilter}
           onConnect={onConnect}
+          onAdd={() => setAdding('pos')}
+        />
+      )}
+
+      {adding && (
+        <AddModal
+          type={adding}
+          company={currentCompany}
+          local={currentLocal}
+          onClose={() => setAdding(null)}
+          onCreated={async () => {
+            setAdding(null);
+            if (onRefresh) await onRefresh();
+          }}
         />
       )}
     </div>
   );
 }
 
+// ----- AddModal: alta unificada (empresa | local | pos) -----
+function AddModal({ type, company, local, onClose, onCreated }) {
+  const [form, setForm] = useState({});
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const set = (k, v) => setForm(f => Object.assign({}, f, { [k]: v }));
+
+  const titles = {
+    empresa: 'Nueva empresa',
+    local: 'Nuevo local',
+    pos: 'Nuevo dispositivo POS',
+  };
+
+  const submit = async (e) => {
+    e?.preventDefault();
+    setError('');
+    if (!window.API) { setError('API no disponible'); return; }
+    setLoading(true);
+    try {
+      if (type === 'empresa') {
+        if (!form.id || !form.nombre) throw new Error('id y nombre son requeridos');
+        await window.API.createEmpresa({ id: form.id.trim(), nombre: form.nombre.trim() });
+      } else if (type === 'local') {
+        if (!form.id || !form.nombre) throw new Error('id y nombre son requeridos');
+        await window.API.createLocal({
+          id: form.id.trim(),
+          empresa_id: company?.idSucursal,
+          nombre: form.nombre.trim(),
+        });
+      } else if (type === 'pos') {
+        if (!form.id || form.numero === '' || form.numero == null) throw new Error('id y número son requeridos');
+        await window.API.createPos({
+          id: form.id.trim(),
+          numero: parseInt(form.numero, 10),
+          local_id: local?._id || local?.cod,
+          empresa_id: company?.idSucursal,
+          ip: form.ip || null,
+          version: form.version || null,
+          hardware_os: form.hardware_os || null,
+        });
+      }
+      await onCreated();
+    } catch (err) {
+      setError(err.message || 'Error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'grid', placeItems: 'center', zIndex: 70 }}>
+      <form onSubmit={submit} onClick={e => e.stopPropagation()} className="card fade-in" style={{ width: 460, padding: 24 }}>
+        <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{titles[type]}</h3>
+        {type === 'local' && company && (
+          <p style={{ margin: '4px 0 14px', fontSize: 12, color: 'var(--fg-muted)' }}>Empresa: <span className="mono">{company.idSucursal}</span> · {company.name}</p>
+        )}
+        {type === 'pos' && (
+          <p style={{ margin: '4px 0 14px', fontSize: 12, color: 'var(--fg-muted)' }}>
+            Local: <span className="mono">{local?._id || local?.cod}</span> · {local?.name} · Empresa <span className="mono">{company?.idSucursal}</span>
+          </p>
+        )}
+        {type === 'empresa' && (
+          <p style={{ margin: '4px 0 14px', fontSize: 12, color: 'var(--fg-muted)' }}>Crea una nueva organización.</p>
+        )}
+
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <label>
+            <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>ID</div>
+            <input className="input" placeholder={type === 'empresa' ? 'ej. farmacia-x' : type === 'local' ? 'ej. local-12' : 'ej. pos-101'} value={form.id || ''} onChange={e => set('id', e.target.value)}/>
+          </label>
+
+          {(type === 'empresa' || type === 'local') && (
+            <label>
+              <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Nombre</div>
+              <input className="input" placeholder={type === 'empresa' ? 'Nombre de la empresa' : 'Nombre del local'} value={form.nombre || ''} onChange={e => set('nombre', e.target.value)}/>
+            </label>
+          )}
+
+          {type === 'pos' && (
+            <>
+              <label>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Número</div>
+                <input className="input" type="number" placeholder="ej. 101" value={form.numero || ''} onChange={e => set('numero', e.target.value)}/>
+              </label>
+              <label>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>IP (opcional)</div>
+                <input className="input" placeholder="192.168.1.50" value={form.ip || ''} onChange={e => set('ip', e.target.value)}/>
+              </label>
+              <label>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Versión (opcional)</div>
+                <input className="input" placeholder="1.2.16" value={form.version || ''} onChange={e => set('version', e.target.value)}/>
+              </label>
+              <label>
+                <div style={{ fontSize: 12, fontWeight: 500, marginBottom: 4 }}>Sistema operativo (opcional)</div>
+                <input className="input" placeholder="Windows 11 Pro" value={form.hardware_os || ''} onChange={e => set('hardware_os', e.target.value)}/>
+              </label>
+            </>
+          )}
+        </div>
+
+        {error && (
+          <div style={{ marginTop: 12, padding: '8px 10px', borderRadius: 6, fontSize: 12, background: 'var(--err-bg, #fee2e2)', color: 'var(--err, #b91c1c)', border: '1px solid color-mix(in oklab, var(--err, #b91c1c) 30%, transparent)' }}>{error}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, marginTop: 18 }}>
+          <button type="button" className="btn" style={{ flex: 1 }} onClick={onClose} disabled={loading}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" style={{ flex: 1 }} disabled={loading}>
+            {loading ? 'Creando…' : 'Crear'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ----- View: companies grid -----
-function CompaniesView({ companies, locales, onSelect }) {
+function CompaniesView({ companies, locales, onSelect, onAdd }) {
   return (
     <>
       <div style={{ marginBottom: 16 }}>
@@ -138,7 +276,7 @@ function CompaniesView({ companies, locales, onSelect }) {
           );
         })}
         {/* Add card */}
-        <button className="card" style={{
+        <button onClick={onAdd} className="card" style={{
           padding: 18, textAlign: 'left', cursor: 'pointer',
           borderStyle: 'dashed', background: 'transparent',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -158,7 +296,7 @@ function CompaniesView({ companies, locales, onSelect }) {
 }
 
 // ----- View: locales list -----
-function LocalesView({ company, locales, onSelect, onBack }) {
+function LocalesView({ company, locales, onSelect, onBack, onAdd }) {
   const totalPos = locales.reduce((a,l) => a+l.pos, 0);
   const totalOnline = locales.reduce((a,l) => a+l.online, 0);
   return (
@@ -173,6 +311,11 @@ function LocalesView({ company, locales, onSelect, onBack }) {
             {locales.length} {locales.length === 1 ? 'local' : 'locales'} · {totalPos} dispositivos · {totalOnline} en línea
           </p>
         </div>
+        {onAdd && (
+          <button className="btn btn-sm btn-primary" onClick={onAdd}>
+            <Icon name="plus" size={12}/> Local
+          </button>
+        )}
       </div>
       <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
         <div className="row" style={{ gridTemplateColumns: '40px 2fr 1fr 1fr 1.5fr 100px', color: 'var(--fg-subtle)', textTransform: 'uppercase', fontSize: 10, letterSpacing: '0.06em', fontWeight: 500, background: 'var(--surface-2)' }}>
@@ -215,7 +358,7 @@ function LocalesView({ company, locales, onSelect, onBack }) {
 }
 
 // ----- View: devices grid -----
-function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConnect }) {
+function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConnect, onAdd }) {
   const [openMenu, setOpenMenu] = useState(null);
   return (
     <>
@@ -242,7 +385,7 @@ function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConne
           <DeviceCard key={d.id} d={d} openMenu={openMenu} setOpenMenu={setOpenMenu} onConnect={() => onConnect(d)}/>
         ))}
         {/* Add */}
-        <button className="card" style={{
+        <button onClick={onAdd} className="card" style={{
           padding: 18, textAlign: 'center', cursor: 'pointer',
           borderStyle: 'dashed', background: 'transparent',
           display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',

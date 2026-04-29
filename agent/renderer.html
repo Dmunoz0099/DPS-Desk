@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>DPS Desk Renderer</title>
+  <style>body { margin: 0; padding: 0; background: #000; }</style>
+</head>
+<body>
+<script>
+  const log = (msg) => window.agent?.log(`[RENDERER] ${msg}`);
+
+  // sessionId -> { pc, dc, stream, pendingCandidates, remoteSet }
+  const sessions = new Map();
+
+  function cleanupSession(sessionId) {
+    const s = sessions.get(sessionId);
+    if (!s) return;
+    try { s.dc?.close(); } catch {}
+    try { s.pc?.close(); } catch {}
+    try { s.stream?.getTracks().forEach(t => t.stop()); } catch {}
+    sessions.delete(sessionId);
+    log(`Session cleaned up: ${sessionId}`);
+  }
+
+  function cleanupAll() {
+    for (const id of [...sessions.keys()]) cleanupSession(id);
+  }
+
+  async function startSession(sessionId, iceServers) {
+    log(`Starting session ${sessionId} with ${iceServers?.length || 0} ICE servers`);
+    cleanupSession(sessionId);
+
+    const pc = new RTCPeerConnection({ iceServers: iceServers || [] });
+    const session = { pc, dc: null, stream: null, pendingCandidates: [], remoteSet: false };
+    sessions.set(sessionId, session);
+
+    pc.onicecandidate = ({ candidate }) => {
+      if (candidate) {
+        window.agent?.sendSignal({
+          type: 'ice-candidate',
+          sessionId,
+          payload: candidate.toJSON ? candidate.toJSON() : candidate,
+        });
+      }
+    };
+
+    pc.oniceconnectionstatechange = () => {
+      log(`ICE state [${sessionId}]: ${pc.iceConnectionState}`);
+    };
+
+    pc.onconnectionstatechange = () => {
+      log(`PC state [${sessionId}]: ${pc.connectionState}`);
+      if (pc.connectionState === 'failed' || pc.connectionState === 'closed') {
+        cleanupSession(sessionId);
+      }
+    };
+
+    // Agent crea el DataChannel: recibe input y envía metadatos (resolución).
+    const dc = pc.createDataChannel('dpsdesk', { ordered: true });
+    session.dc = dc;
+
+    const sendResolution = () => {
+      const track = session.stream?.getVideoTracks?.()[0];
+      const settings = track?.getSettings?.() || {};
+      const width = settings.width || 1920;
+      const height = settings.height || 1080;
+      if (dc.readyState === 'open') {
+        try { dc.send(JSON.stringify({ type: 'screen-resolution', width, height })); } catch {}
+      }
+    };
+
+    dc.onopen = () => {
+      log(`DataChannel open [${sessionId}]`);
+      sendResolution();
+    };
+    dc.onclose = () => log(`DataChannel closed [${sessionId}]`);
+    dc.onerror = (e) => log(`DataChannel error [${sessionId}]: ${e?.message || e?.error?.message || 'unknown'}`);
+    dc.onmessage = ({ data }) => {
+      try {
+        const msg = JSON.parse(data);
+        window.agent?.sendInput(msg);
+      } catch (err) {
+        log(`DC parse error: ${err.message}`);
+      }
+    };
+
+    // Captura de pantalla → addTrack → createOffer → sendSignal('offer')
+    try {
+      const sources = await window.agent?.getDesktopSources();
+      if (!sources || sources.length === 0) {
+        log('ERROR: No desktop sources');
+        cleanupSession(sessionId);
+        return;
+      }
+      const source = sources[0];
+      log(`Capturing source: ${source.name}`);
+
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: false,
+        video: {
+          mandatory: {
+            chromeMediaSource: 'desktop',
+            chromeMediaSourceId: source.id,
+            minWidth: 640,
+            maxWidth: 1920,
+            minHeight: 480,
+            maxHeight: 1080,
+            maxFrameRate: 30,
+          },
+        },
+      });
+      session.stream = stream;
+      log(`Stream acquired: ${stream.getVideoTracks().length} video tracks`);
+
+      for (const track of stream.getVideoTracks()) {
+        pc.addTrack(track, stream);
+      }
+
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      window.agent?.sendSignal({
+        type: 'offer',
+        sessionId,
+        payload: { type: offer.type, sdp: offer.sdp },
+      });
+      log(`Offer sent [${sessionId}]`);
+    } catch (err) {
+      log(`startSession error: ${err.message}`);
+      cleanupSession(sessionId);
+    }
+  }
+
+  async function handleAnswer(sessionId, payload) {
+    const s = sessions.get(sessionId);
+    if (!s?.pc) { log(`answer: no session ${sessionId}`); return; }
+    try {
+      await s.pc.setRemoteDescription(new RTCSessionDescription(payload));
+      s.remoteSet = true;
+      log(`Answer applied [${sessionId}]`);
+      // Drenar candidates en buffer
+      while (s.pendingCandidates.length) {
+        const c = s.pendingCandidates.shift();
+        try { await s.pc.addIceCandidate(new RTCIceCandidate(c)); }
+        catch (e) { log(`buffered cand error: ${e.message}`); }
+      }
+    } catch (err) {
+      log(`setRemoteDescription error: ${err.message}`);
+    }
+  }
+
+  async function handleIceCandidate(sessionId, payload) {
+    const s = sessions.get(sessionId);
+    if (!s?.pc) { log(`ice: no session ${sessionId}`); return; }
+    if (!payload?.candidate) return;
+    try {
+      if (s.remoteSet) {
+        await s.pc.addIceCandidate(new RTCIceCandidate(payload));
+      } else {
+        s.pendingCandidates.push(payload);
+      }
+    } catch (err) {
+      log(`addIceCandidate error: ${err.message}`);
+    }
+  }
+
+  window.agent?.onSignal((msg) => {
+    (async () => {
+      try {
+        const { type, payload, sessionId } = msg || {};
+        if (type === 'browser-ready') {
+          await startSession(sessionId, payload?.iceServers);
+        } else if (type === 'answer') {
+          await handleAnswer(sessionId, payload);
+        } else if (type === 'ice-candidate') {
+          await handleIceCandidate(sessionId, payload);
+        } else if (type === 'browser-left') {
+          cleanupSession(sessionId);
+        }
+      } catch (err) {
+        log(`Signal handler error: ${err.message}`);
+      }
+    })();
+  });
+
+  window.addEventListener('beforeunload', cleanupAll);
+</script>
+</body>
+</html>
