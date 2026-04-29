@@ -92,7 +92,13 @@ function App() {
   useEffect(() => {
     if (!logged) return;
     refreshData();
-  }, [logged, refreshData]);
+    // Refrescar el estado de la red cada 5s mientras la sesión esté activa
+    // (no mientras el usuario está en una sesión WebRTC para no saturar)
+    const id = setInterval(() => {
+      if (!connectingDevice) refreshData();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [logged, refreshData, connectingDevice]);
 
   const handleLogout = () => {
     if (window.API) window.API.clearToken();
@@ -367,6 +373,13 @@ function ConnectingModal({ device, onClose }) {
     onClose();
   };
 
+  // Permitir cerrar el modal con la tecla Escape
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') finalize(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const sendInput = (msg) => {
     const dc = dcRef.current;
     if (dc && dc.readyState === 'open') {
@@ -413,9 +426,22 @@ function ConnectingModal({ device, onClose }) {
               </div>
             ))}
             {stage === 'error' && (
-              <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: '#1c0a0a', border: '1px solid #7f1d1d', color: '#f87171', fontSize: 12 }}>
-                ✗ {errorMsg}
-              </div>
+              <>
+                <div style={{ marginTop: 14, padding: '10px 14px', borderRadius: 8, background: '#1c0a0a', border: '1px solid #7f1d1d', color: '#f87171', fontSize: 12 }}>
+                  ✗ {errorMsg}
+                </div>
+                <div style={{ marginTop: 16, display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={finalize}
+                    style={{ flex: 1, padding: '10px 14px', borderRadius: 8, background: '#1e293b', border: '1px solid #334155', color: '#e2e8f0', fontSize: 13, cursor: 'pointer', fontFamily: 'inherit' }}
+                  >
+                    Cerrar
+                  </button>
+                </div>
+                <div style={{ marginTop: 10, fontSize: 11, color: '#475569', textAlign: 'center' }}>
+                  o presiona Esc
+                </div>
+              </>
             )}
             {stage === 'connecting' && (
               <div style={{ color: '#fbbf24', fontSize: 12, marginTop: 4 }}>▮</div>

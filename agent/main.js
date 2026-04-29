@@ -137,6 +137,14 @@ function createMainWindow() {
     }
   });
 
+  // Minimizar también oculta a la bandeja en vez de minimizar.
+  // Windows pone los procesos minimizados en "Power Throttling" lo que
+  // suspende el WebSocket de signaling y mata las sesiones activas.
+  mainWindow.on('minimize', (event) => {
+    event.preventDefault();
+    mainWindow.hide();
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
