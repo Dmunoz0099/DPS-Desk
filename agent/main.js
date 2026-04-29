@@ -1,6 +1,12 @@
 const path = require('path');
 const fsForEnv = require('fs');
 const { app, BrowserWindow, Tray, Menu, ipcMain, screen, protocol, desktopCapturer } = require('electron');
+
+// Evitar que Chromium pause/throttle el renderer oculto que hace el screen capture
+app.commandLine.appendSwitch('disable-renderer-backgrounding');
+app.commandLine.appendSwitch('disable-background-timer-throttling');
+app.commandLine.appendSwitch('disable-backgrounding-occluded-windows');
+app.commandLine.appendSwitch('enable-usermedia-screen-capture');
 const fs = require('fs');
 const os = require('os');
 const SignalingClient = require('./src/signaling');
@@ -146,6 +152,7 @@ function createHiddenWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
   hiddenWindow.loadFile(path.join(__dirname, 'renderer.html'));
