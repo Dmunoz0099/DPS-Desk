@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const { v4: uuidv4 } = require('uuid');
 const {
   getRegisteredDevice,
+  getPosPorId,
   createSessionRow,
   deleteSessionRow,
 } = require('../db/supabase');
@@ -40,7 +41,8 @@ router.post('/', async (req, res) => {
 
   try {
     const device = await getRegisteredDevice(posId);
-    if (!device) return res.status(404).json({ error: 'Agente no registrado' });
+    const pos    = device ? null : await getPosPorId(posId);
+    if (!device && !pos) return res.status(404).json({ error: 'Agente no registrado' });
   } catch (err) {
     console.error('[Sessions] lookup error:', err.message);
     return res.status(500).json({ error: err.message });

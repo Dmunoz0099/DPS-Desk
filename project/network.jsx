@@ -83,6 +83,16 @@ function NetworkScreen({ onConnect, onRefresh }) {
           filter={filter} setFilter={setFilter}
           onConnect={onConnect}
           onAdd={() => setAdding('pos')}
+          onDelete={async (device) => {
+            if (!window.API) return;
+            if (!window.confirm(`¿Eliminar ${device.name} (${device.id})?`)) return;
+            try {
+              await window.API.deletePos(device.id);
+              if (onRefresh) await onRefresh();
+            } catch (err) {
+              alert('Error al eliminar: ' + err.message);
+            }
+          }}
         />
       )}
 
@@ -358,7 +368,7 @@ function LocalesView({ company, locales, onSelect, onBack, onAdd }) {
 }
 
 // ----- View: devices grid -----
-function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConnect, onAdd }) {
+function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConnect, onAdd, onDelete }) {
   const [openMenu, setOpenMenu] = useState(null);
   return (
     <>
@@ -382,7 +392,7 @@ function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConne
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
         {devices.map(d => (
-          <DeviceCard key={d.id} d={d} openMenu={openMenu} setOpenMenu={setOpenMenu} onConnect={() => onConnect(d)}/>
+          <DeviceCard key={d.id} d={d} openMenu={openMenu} setOpenMenu={setOpenMenu} onConnect={() => onConnect(d)} onDelete={() => onDelete && onDelete(d)}/>
         ))}
         {/* Add */}
         <button onClick={onAdd} className="card" style={{
@@ -409,7 +419,7 @@ function DevicesView({ local, devices, totalForLocal, filter, setFilter, onConne
   );
 }
 
-function DeviceCard({ d, openMenu, setOpenMenu, onConnect }) {
+function DeviceCard({ d, openMenu, setOpenMenu, onConnect, onDelete }) {
   const isOnline = d.status === 'online';
   const menuOpen = openMenu === d.id;
   return (
@@ -444,17 +454,11 @@ function DeviceCard({ d, openMenu, setOpenMenu, onConnect }) {
               minWidth: 200, padding: 4, boxShadow: 'var(--shadow-lg)',
             }}>
               {[
-                { icon: 'monitor',  label: 'Conectar (Pantalla)' },
-                { icon: 'file',     label: 'Transferir archivos' },
-                { icon: 'terminal', label: 'Abrir terminal' },
-                { icon: 'link',     label: 'Túnel TCP' },
-                { icon: 'globe',    label: 'Forzar relay' },
-                { icon: 'cpu',      label: 'RDP' },
+                { icon: 'monitor',  label: 'Conectar (Pantalla)', action: () => { setOpenMenu(null); onConnect(); } },
                 null,
-                { icon: 'edit',     label: 'Renombrar' },
-                { icon: 'trash',    label: 'Eliminar', tone: 'err' },
+                { icon: 'trash',    label: 'Eliminar', tone: 'err', action: () => { setOpenMenu(null); onDelete(); } },
               ].map((it, i) => it === null ? <div key={i} className="hr" style={{ margin: '4px 0' }}/> : (
-                <button key={i} className="nav-item" style={{ padding: '7px 10px', fontSize: 12, color: it.tone === 'err' ? 'var(--err)' : 'var(--fg-muted)' }}>
+                <button key={i} className="nav-item" onClick={it.action} style={{ padding: '7px 10px', fontSize: 12, color: it.tone === 'err' ? 'var(--err)' : 'var(--fg-muted)' }}>
                   <Icon name={it.icon} size={13}/>
                   {it.label}
                 </button>

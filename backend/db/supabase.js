@@ -193,6 +193,11 @@ async function createLocal({ id, empresa_id, nombre }) {
   return data;
 }
 
+async function deletePos(posId) {
+  const { error } = await supabase.from('pos').delete().eq('id', posId);
+  if (error) throw error;
+}
+
 async function createPos(payload) {
   const allowed = [
     'id', 'numero', 'local_id', 'empresa_id', 'estado',
@@ -246,4 +251,5 @@ module.exports = {
   createEmpresa,
   createLocal,
   createPos,
+  deletePos,
 };

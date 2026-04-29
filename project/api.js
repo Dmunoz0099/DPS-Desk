@@ -86,6 +86,9 @@
       body: JSON.stringify(payload),
     });
   }
+  async function deletePos(posId) {
+    return request('/api/devices/pos/' + encodeURIComponent(posId), { method: 'DELETE' });
+  }
 
   // ── Network data — devuelve la forma de window.MOCK ─────────────────────
   // Backend → endpoints encadenados:
@@ -116,10 +119,6 @@
       })
     );
     const allPos = posPorLocal.flat();
-
-    let registered = [];
-    try { registered = await request('/api/devices/registered'); }
-    catch (_e) { /* opcional */ }
 
     const COMPANIES = empresas.map((e, i) => ({
       name: e.nombre,
@@ -154,47 +153,6 @@
       lastSeen: p.ultimaActividadMin != null ? ('hace ' + p.ultimaActividadMin + ' min') : '',
     }));
 
-    // Agents Electron: agregar como un "local" virtual por empresa "Agent DPS"
-    if (registered.length) {
-      const agentLocalId = '__agents__';
-      const agentCompanyName = 'Agent DPS';
-      if (!COMPANIES.find((c) => c.name === agentCompanyName)) {
-        const onlineCount = registered.filter((d) => d.online).length;
-        COMPANIES.push({
-          name: agentCompanyName,
-          idSucursal: 'agents',
-          pos: registered.length,
-          online: onlineCount,
-          offline: registered.length - onlineCount,
-          color: COLORS[COMPANIES.length % COLORS.length],
-        });
-        LOCALES.push({
-          id: LOCALES.length + 1,
-          _id: agentLocalId,
-          company: agentCompanyName,
-          name: 'Remote',
-          cod: agentLocalId,
-          pos: registered.length,
-          online: onlineCount,
-          offline: registered.length - onlineCount,
-          city: '—',
-        });
-      }
-      for (const dev of registered) {
-        DEVICES.push({
-          id: dev.pos_id,
-          rustdeskId: dev.pos_id,
-          company: agentCompanyName,
-          localCod: agentLocalId,
-          ip: dev.ip || '',
-          version: dev.version || '',
-          status: dev.online ? 'online' : 'offline',
-          name: dev.hostname || dev.pos_id,
-          lastSeen: dev.last_seen ? new Date(dev.last_seen).toLocaleString() : '',
-        });
-      }
-    }
-
     return { COMPANIES, LOCALES, DEVICES };
   }
 
@@ -203,7 +161,7 @@
     getToken, setToken, clearToken,
     login, me,
     createSession, deleteSession,
-    createEmpresa, createLocal, createPos,
+    createEmpresa, createLocal, createPos, deletePos,
     getNetworkData,
   };
 })();

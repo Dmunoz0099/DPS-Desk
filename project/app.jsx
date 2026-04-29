@@ -207,14 +207,23 @@ function ConnectingModal({ device, onClose }) {
   const [errorMsg, setErrorMsg] = useState('');
   const [sessionId, setSessionId] = useState(null);
 
-  const videoRef   = useRef(null);
-  const overlayRef = useRef(null);
-  const wsRef      = useRef(null);
-  const pcRef      = useRef(null);
-  const dcRef      = useRef(null);
-  const sidRef     = useRef(null);
+  const videoRef         = useRef(null);
+  const overlayRef       = useRef(null);
+  const wsRef            = useRef(null);
+  const pcRef            = useRef(null);
+  const dcRef            = useRef(null);
+  const sidRef           = useRef(null);
+  const remoteStreamRef  = useRef(null); // guarda el stream hasta que el <video> esté en el DOM
 
   const addLog = useCallback((msg) => setLogs(l => [...l.slice(-30), msg]), []);
+
+  // Asignar el stream al <video> una vez que stage pasa a 'connected' y el elemento existe
+  useEffect(() => {
+    if (stage === 'connected' && videoRef.current && remoteStreamRef.current) {
+      videoRef.current.srcObject = remoteStreamRef.current;
+      videoRef.current.play().catch(() => {});
+    }
+  }, [stage]);
 
   useEffect(() => {
     let cancelled = false;
@@ -285,10 +294,10 @@ function ConnectingModal({ device, onClose }) {
 
           pc.ontrack = ({ track, streams }) => {
             addLog(`✓ Track ${track.kind} recibido`);
-            if (track.kind === 'video' && videoRef.current) {
-              videoRef.current.srcObject = streams[0] || new MediaStream([track]);
-              videoRef.current.play().catch(() => {});
-              setStage('connected');
+            if (track.kind === 'video') {
+              // Guardar stream — el <video> puede no estar en el DOM todavía
+              remoteStreamRef.current = streams[0] || new MediaStream([track]);
+              setStage('connected'); // el useEffect lo asigna cuando el elemento exista
             }
           };
 

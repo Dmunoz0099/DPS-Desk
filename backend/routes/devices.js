@@ -11,6 +11,7 @@ const {
   createEmpresa,
   createLocal,
   createPos,
+  deletePos,
 } = require('../db/supabase');
 
 const router = express.Router();
@@ -152,6 +153,17 @@ router.post('/pos', async (req, res) => {
     res.status(201).json(r);
   } catch (err) {
     console.error('[Devices] POST /pos:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /devices/pos/:posId
+router.delete('/pos/:posId', async (req, res) => {
+  try {
+    await deletePos(req.params.posId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Devices] DELETE /pos/:id:', err.message);
     res.status(500).json({ error: err.message });
   }
 });
