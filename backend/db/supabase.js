@@ -194,6 +194,8 @@ async function createLocal({ id, empresa_id, nombre }) {
 }
 
 async function deletePos(posId) {
+  // FK: sessions.pos_id references pos.id in production. Cascade manually.
+  await supabase.from('sessions').delete().eq('pos_id', posId);
   const { error } = await supabase.from('pos').delete().eq('id', posId);
   if (error) throw error;
 }

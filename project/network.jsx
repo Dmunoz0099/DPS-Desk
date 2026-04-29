@@ -38,7 +38,7 @@ function NetworkScreen({ onConnect, onRefresh }) {
       .filter(d => d.company === local.company && d.localCod === local.cod)
       .filter(d => filter === 'all' || d.status === filter)
       .filter(d => !search || d.name.toLowerCase().includes(search.toLowerCase()) || d.rustdeskId.includes(search));
-  }, [selectedLocal, filter, search]);
+  }, [selectedLocal, filter, search, DEVICES]);
 
   return (
     <div className="fade-in" style={{ padding: '20px 28px 60px', maxWidth: 1400, margin: '0 auto' }}>
