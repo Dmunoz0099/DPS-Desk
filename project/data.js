@@ -16,4 +16,9 @@ const EVENTS = [];
 // 24h connectivity series — placeholder neutral
 const CONN_SERIES = Array.from({ length: 24 }, () => 0);
 
-window.MOCK = { COMPANIES, LOCALES, DEVICES, EVENTS, CONN_SERIES };
+// Estructura jerárquica que la pantalla Network usa. Vacía hasta que
+// api.js termine de hacer fetch — todos los componentes deben aguantar
+// COMPANIES_FULL=[] sin reventar.
+const COMPANIES_FULL = [];
+
+window.MOCK = { COMPANIES, LOCALES, DEVICES, EVENTS, CONN_SERIES, COMPANIES_FULL };

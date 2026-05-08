@@ -19,6 +19,9 @@
     try { s.pc?.close(); } catch {}
     try { s.stream?.getTracks().forEach(t => t.stop()); } catch {}
     sessions.delete(sessionId);
+    // Liberar cualquier botón/tecla que pudiera haber quedado presionada al
+    // morir la sesión (drag interrumpido, fallo de ICE, etc.).
+    try { window.agent?.releaseInputs(); } catch {}
     log(`Session cleaned up: ${sessionId}`);
   }
 
@@ -105,7 +108,11 @@
             maxWidth: 1920,
             minHeight: 480,
             maxHeight: 1080,
-            maxFrameRate: 30,
+            // Pedirle al capturador hasta 60fps. desktopCapturer entrega frames
+            // sólo cuando hay cambios en pantalla, así que en idle no quema CPU
+            // pero en movimiento aprovecha todo el headroom.
+            minFrameRate: 30,
+            maxFrameRate: 60,
           },
         },
       });
@@ -113,7 +120,47 @@
       log(`Stream acquired: ${stream.getVideoTracks().length} video tracks`);
 
       for (const track of stream.getVideoTracks()) {
-        pc.addTrack(track, stream);
+        const sender = pc.addTrack(track, stream);
+        // Forzar bitrate alto y priorizar framerate sobre resolución cuando la
+        // red se ponga ajustada — sin esto el encoder se queda en ~1Mbps y
+        // baja a 15fps en movimiento.
+        try {
+          const params = sender.getParameters();
+          if (!params.encodings || params.encodings.length === 0) {
+            params.encodings = [{}];
+          }
+          params.encodings[0].maxBitrate = 8_000_000;        // 8 Mbps — suficiente para 1080p60
+          params.encodings[0].maxFramerate = 60;
+          params.encodings[0].priority = 'high';
+          params.encodings[0].networkPriority = 'high';
+          params.degradationPreference = 'maintain-framerate';
+          await sender.setParameters(params);
+          log(`Sender params set: 8Mbps / 60fps / maintain-framerate`);
+        } catch (err) {
+          log(`setParameters warning: ${err.message}`);
+        }
+      }
+
+      // Preferir H.264 si está disponible — tiene aceleración por hardware en
+      // Windows y mantiene mejor el framerate alto que VP8/VP9 por software.
+      try {
+        const transceivers = pc.getTransceivers();
+        const caps = RTCRtpSender.getCapabilities && RTCRtpSender.getCapabilities('video');
+        if (caps && caps.codecs) {
+          const h264 = caps.codecs.filter(c => /h264/i.test(c.mimeType));
+          const rest = caps.codecs.filter(c => !/h264/i.test(c.mimeType));
+          if (h264.length) {
+            const ordered = [...h264, ...rest];
+            for (const t of transceivers) {
+              if (t.sender && t.sender.track && t.sender.track.kind === 'video' && t.setCodecPreferences) {
+                t.setCodecPreferences(ordered);
+              }
+            }
+            log(`Codec preference: H.264 first (${h264.length} variants)`);
+          }
+        }
+      } catch (err) {
+        log(`setCodecPreferences warning: ${err.message}`);
       }
 
       const offer = await pc.createOffer();

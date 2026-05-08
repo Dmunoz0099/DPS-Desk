@@ -200,6 +200,64 @@ async function deletePos(posId) {
   if (error) throw error;
 }
 
+async function deleteLocal(localId) {
+  // Cascada: sessions → pos → local. Las FKs apuntan a pos.id y local.id.
+  const { data: posRows } = await supabase.from('pos').select('id').eq('local_id', localId);
+  const posIds = (posRows || []).map(r => r.id);
+  if (posIds.length) {
+    await supabase.from('sessions').delete().in('pos_id', posIds);
+    await supabase.from('pos').delete().eq('local_id', localId);
+  }
+  const { error } = await supabase.from('locales').delete().eq('id', localId);
+  if (error) throw error;
+}
+
+async function deleteEmpresa(empresaId) {
+  // Cascada: sessions → pos → locales → empresa.
+  const { data: posRows } = await supabase.from('pos').select('id').eq('empresa_id', empresaId);
+  const posIds = (posRows || []).map(r => r.id);
+  if (posIds.length) {
+    await supabase.from('sessions').delete().in('pos_id', posIds);
+    await supabase.from('pos').delete().eq('empresa_id', empresaId);
+  }
+  await supabase.from('locales').delete().eq('empresa_id', empresaId);
+  const { error } = await supabase.from('empresas').delete().eq('id', empresaId);
+  if (error) throw error;
+}
+
+async function updateEmpresa(empresaId, { nombre }) {
+  const { data, error } = await supabase
+    .from('empresas')
+    .update({ nombre })
+    .eq('id', empresaId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function updateLocal(localId, { nombre }) {
+  const { data, error } = await supabase
+    .from('locales')
+    .update({ nombre })
+    .eq('id', localId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+async function updatePos(posId, { numero }) {
+  const { data, error } = await supabase
+    .from('pos')
+    .update({ numero })
+    .eq('id', posId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
 async function createPos(payload) {
   const allowed = [
     'id', 'numero', 'local_id', 'empresa_id', 'estado',
@@ -254,4 +312,9 @@ module.exports = {
   createLocal,
   createPos,
   deletePos,
+  deleteLocal,
+  deleteEmpresa,
+  updateEmpresa,
+  updateLocal,
+  updatePos,
 };

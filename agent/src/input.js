@@ -4,6 +4,7 @@ robot.setMouseDelay(1);
 robot.setKeyboardDelay(1);
 
 const heldKeys = new Set();
+const heldButtons = new Set();
 
 async function handleInput(msg, screenWidth, screenHeight) {
   try {
@@ -20,12 +21,26 @@ async function handleInput(msg, screenWidth, screenHeight) {
       }
       case 'mousedown': {
         const btn = msg.button === 2 ? 'right' : msg.button === 1 ? 'middle' : 'left';
+        // Asegurar posición exacta antes de presionar (evita clicks "fantasma"
+        // si el último mousemove se perdió en transit).
+        if (typeof msg.x === 'number' && typeof msg.y === 'number') {
+          const x = Math.round(msg.x * screenWidth);
+          const y = Math.round(msg.y * screenHeight);
+          robot.moveMouse(x, y);
+        }
+        heldButtons.add(btn);
         robot.mouseToggle('down', btn);
         break;
       }
       case 'mouseup': {
         const btn = msg.button === 2 ? 'right' : msg.button === 1 ? 'middle' : 'left';
-        robot.mouseToggle('up', btn);
+        if (heldButtons.has(btn)) {
+          heldButtons.delete(btn);
+          robot.mouseToggle('up', btn);
+        } else {
+          // El navegador puede mandar un mouseup "extra" durante limpieza —
+          // si no estaba presionado, ignorar para no generar click espurio.
+        }
         break;
       }
       case 'wheel': {
@@ -117,4 +132,18 @@ function mapKeyName(key) {
   return map[key] || null;
 }
 
-module.exports = { handleInput };
+// Libera todos los botones y teclas que el agente cree estar presionando.
+// Se llama cuando termina una sesión para que la siguiente empiece limpia
+// (sin esto un drag interrumpido dejaba el botón "pegado" en Windows).
+function releaseAll() {
+  for (const btn of Array.from(heldButtons)) {
+    try { robot.mouseToggle('up', btn); } catch {}
+  }
+  heldButtons.clear();
+  for (const k of Array.from(heldKeys)) {
+    try { robot.keyToggle(k, 'up'); } catch {}
+  }
+  heldKeys.clear();
+}
+
+module.exports = { handleInput, releaseAll };

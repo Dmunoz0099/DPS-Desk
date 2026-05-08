@@ -33,14 +33,20 @@ async function getScreenStream() {
         chromeMediaSourceId: source.id,
         maxWidth: 1920,
         maxHeight: 1080,
-        minFrameRate: 15,
-        maxFrameRate: 30,
+        minFrameRate: 30,
+        maxFrameRate: 60,
       },
     },
   });
   window.agent.log(`Got stream with ${cachedStream.getTracks().length} tracks`);
 
-  cachedStream.getVideoTracks()[0].onended = () => {
+  // contentHint='motion' le dice al encoder que priorice fluidez de movimiento
+  // sobre nitidez. Para control remoto interactivo es lo que queremos —
+  // preferimos un texto un toque más blando antes que ver salto de frames.
+  const videoTrack = cachedStream.getVideoTracks()[0];
+  try { videoTrack.contentHint = 'motion'; } catch {}
+
+  videoTrack.onended = () => {
     cachedStream = null;
   };
 
@@ -73,9 +79,19 @@ window.agent.onSignal(async (msg) => {
         const sender = pc.addTrack(track, stream);
         const params = sender.getParameters();
         if (!params.encodings) params.encodings = [{}];
-        params.encodings[0].maxBitrate = 2_500_000;
+        // Bitrate alto para 1080p60 con mucho movimiento. Si la red no aguanta,
+        // la rebaja automáticamente — preferimos llenar la tubería antes que
+        // inducir latencia por frames represados.
+        params.encodings[0].maxBitrate = 12_000_000;
+        params.encodings[0].maxFramerate = 60;
         params.encodings[0].priority = 'high';
-        sender.setParameters(params).catch(() => {});
+        params.encodings[0].networkPriority = 'high';
+        // Cuando hay congestión, sacrifica resolución/calidad antes que fps.
+        // Para control remoto preferimos siempre 60 fps con un poco más blando.
+        params.degradationPreference = 'maintain-framerate';
+        sender.setParameters(params).catch((err) => {
+          window.agent.log(`setParameters fallback: ${err.message}`);
+        });
       });
       window.agent.log('All tracks added');
 

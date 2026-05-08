@@ -12,6 +12,11 @@ const {
   createLocal,
   createPos,
   deletePos,
+  deleteLocal,
+  deleteEmpresa,
+  updateEmpresa,
+  updateLocal,
+  updatePos,
 } = require('../db/supabase');
 
 const router = express.Router();
@@ -25,6 +30,16 @@ function setDeviceOnline(posId, online) {
   } else {
     onlineDevices.delete(posId);
   }
+}
+
+// Refresca el campo `estado` de un POS según si el agente está conectado
+// por WebSocket en este momento. La columna estado en la DB queda como
+// fuente histórica/inicial; la verdad de "online ahora mismo" vive en memoria.
+function withLiveEstado(p) {
+  if (!p) return p;
+  return Object.assign({}, p, {
+    estado: onlineDevices.has(p.id) ? 'online' : 'offline',
+  });
 }
 
 // GET /devices
@@ -67,7 +82,7 @@ router.get('/empresas/:empresaId/locales', async (req, res) => {
 router.get('/locales/:localId/pos', async (req, res) => {
   try {
     const data = await getPosPorLocal(req.params.localId);
-    res.json(data);
+    res.json((data || []).map(withLiveEstado));
   } catch (err) {
     console.error('[Devices] GET /locales/:id/pos error:', err.message);
     res.status(500).json({ error: err.message });
@@ -107,7 +122,7 @@ router.get('/pos/:posId', async (req, res) => {
     // Si no está en devices, busca en pos
     const p = await getPosPorId(posId);
     if (!p) return res.status(404).json({ error: 'POS no encontrado' });
-    res.json(p);
+    res.json(withLiveEstado(p));
   } catch (err) {
     console.error('[Devices] GET /pos/:id error:', err.message);
     res.status(500).json({ error: err.message });
@@ -164,6 +179,68 @@ router.delete('/pos/:posId', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('[Devices] DELETE /pos/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /devices/locales/:localId
+router.delete('/locales/:localId', async (req, res) => {
+  try {
+    await deleteLocal(req.params.localId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Devices] DELETE /locales/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// DELETE /devices/empresas/:empresaId
+router.delete('/empresas/:empresaId', async (req, res) => {
+  try {
+    await deleteEmpresa(req.params.empresaId);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('[Devices] DELETE /empresas/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /devices/empresas/:empresaId
+router.patch('/empresas/:empresaId', async (req, res) => {
+  try {
+    const { nombre } = req.body || {};
+    if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre requerido' });
+    const data = await updateEmpresa(req.params.empresaId, { nombre: nombre.trim() });
+    res.json(data);
+  } catch (err) {
+    console.error('[Devices] PATCH /empresas/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /devices/locales/:localId
+router.patch('/locales/:localId', async (req, res) => {
+  try {
+    const { nombre } = req.body || {};
+    if (!nombre || !nombre.trim()) return res.status(400).json({ error: 'nombre requerido' });
+    const data = await updateLocal(req.params.localId, { nombre: nombre.trim() });
+    res.json(data);
+  } catch (err) {
+    console.error('[Devices] PATCH /locales/:id:', err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// PATCH /devices/pos/:posId
+router.patch('/pos/:posId', async (req, res) => {
+  try {
+    const { numero } = req.body || {};
+    const num = parseInt(numero, 10);
+    if (!Number.isFinite(num)) return res.status(400).json({ error: 'numero inválido' });
+    const data = await updatePos(req.params.posId, { numero: num });
+    res.json(data);
+  } catch (err) {
+    console.error('[Devices] PATCH /pos/:id:', err.message);
     res.status(500).json({ error: err.message });
   }
 });

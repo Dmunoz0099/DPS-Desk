@@ -55,6 +55,10 @@ const Icon = ({ name, size = 16, stroke = 1.75, className = '', style }) => {
     sliders:   <><path d="M4 6h16M4 12h16M4 18h16"/><circle cx="8" cy="6" r="2"/><circle cx="14" cy="12" r="2"/><circle cx="6" cy="18" r="2"/></>,
     layers:    <><path d="m12 2 10 6-10 6L2 8z"/><path d="m2 16 10 6 10-6"/><path d="m2 12 10 6 10-6"/></>,
     bell0:     <><path d="M6 8a6 6 0 0 1 12 0"/><path d="M18 8c0 7 3 9 3 9H3s3-2 3-9"/><path d="m2 2 20 20"/></>,
+    dots:      <><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></>,
+    card:      <><rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20M6 15h4"/></>,
+    expand:    <><path d="M3 9V3h6M21 9V3h-6M3 15v6h6M21 15v6h-6"/></>,
+    shrink:    <><path d="M9 3v6H3M15 3v6h6M9 21v-6H3M15 21v-6h6"/></>,
   };
   const p = paths[name];
   if (!p) return null;

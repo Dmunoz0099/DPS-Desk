@@ -10,7 +10,7 @@ app.commandLine.appendSwitch('enable-usermedia-screen-capture');
 const fs = require('fs');
 const os = require('os');
 const SignalingClient = require('./src/signaling');
-const { handleInput } = require('./src/input');
+const { handleInput, releaseAll } = require('./src/input');
 const { getPosId } = require('./src/posId');
 const { initLogger, log } = require('./src/logger');
 
@@ -34,6 +34,10 @@ const DEFAULT_BACKEND = 'https://backend-production-a5b7d.up.railway.app';
 const DEFAULT_SIGNALING = 'wss://backend-production-a5b7d.up.railway.app';
 const SIGNALING_URL = process.env.SIGNALING_URL || DEFAULT_SIGNALING;
 const BACKEND_HTTP_URL = process.env.BACKEND_HTTP_URL || DEFAULT_BACKEND;
+
+// Si el proceso fue arrancado por el auto-start de Windows o el instalador
+// pasa --hidden, no mostramos la ventana — solo queda el ícono en la bandeja.
+const startHidden = process.argv.includes('--hidden');
 
 let mainWindow = null;
 let hiddenWindow = null;
@@ -67,8 +71,13 @@ if (!gotLock) {
   process.exit(0);
 }
 
-app.on('second-instance', () => {
-  if (mainWindow) {
+app.on('second-instance', (_e, argv) => {
+  // Si la segunda instancia trae --hidden (lo manda el auto-start de Windows
+  // si el usuario hace doble-click cuando ya estaba corriendo), no mostramos
+  // la ventana. En cualquier otro caso, asumimos que el usuario quiere abrir
+  // la UI.
+  const wantsHidden = Array.isArray(argv) && argv.includes('--hidden');
+  if (mainWindow && !wantsHidden) {
     if (mainWindow.isMinimized()) mainWindow.restore();
     mainWindow.show();
     mainWindow.focus();
@@ -123,7 +132,12 @@ function createMainWindow() {
     mainWindow.loadURL('dpsdesk://app/index.html');
   }
 
-  mainWindow.show();
+  // Cuando el agente arranca con Windows (--hidden) la ventana queda oculta:
+  // solo se ve el ícono de la bandeja. El usuario puede abrirla desde ahí o
+  // volviendo a ejecutar el acceso directo.
+  if (!startHidden) {
+    mainWindow.show();
+  }
 
   if (process.env.NODE_ENV === 'development') {
     mainWindow.webContents.openDevTools();
@@ -167,13 +181,45 @@ function createHiddenWindow() {
 }
 
 function getIcon() {
-  const iconPath = path.join(__dirname, 'build', 'icon.png');
-  if (fs.existsSync(iconPath)) {
-    const { nativeImage } = require('electron');
-    return nativeImage.createFromPath(iconPath);
-  }
   const { nativeImage } = require('electron');
+  // En Windows el .ico se ve más nítido en la bandeja porque trae los tamaños
+  // 16/24/32 embebidos. En empaquetado, los recursos quedan junto al .exe.
+  const candidates = [
+    path.join(__dirname, 'build', 'icon.ico'),
+    path.join(__dirname, 'build', 'icon.png'),
+    path.join(process.resourcesPath || '', 'build', 'icon.ico'),
+    path.join(process.resourcesPath || '', 'build', 'icon.png'),
+  ];
+  for (const p of candidates) {
+    if (p && fs.existsSync(p)) {
+      const img = nativeImage.createFromPath(p);
+      if (!img.isEmpty()) return img;
+    }
+  }
   return nativeImage.createEmpty();
+}
+
+function ensureAutoStart() {
+  // En desarrollo (electron .) no registramos auto-start: process.execPath
+  // apunta al binario de electron, no al .exe del agente.
+  if (!app.isPackaged) return;
+  try {
+    // Siempre re-registramos. El instalador NSIS también escribe la entrada,
+    // pero acá la fijamos en cada arranque para que sobreviva a:
+    //   - reinstalaciones que cambian la ruta del .exe
+    //   - usuarios que la borran a mano
+    //   - actualizaciones que rompen la entrada vieja
+    app.setLoginItemSettings({
+      openAtLogin: true,
+      path: process.execPath,
+      args: ['--hidden'],
+    });
+
+    const settings = app.getLoginItemSettings({ args: ['--hidden'] });
+    log(`Auto-start: openAtLogin=${settings.openAtLogin} willLaunch=${settings.executableWillLaunchAtLogin} path=${process.execPath}`);
+  } catch (err) {
+    log(`ensureAutoStart failed: ${err.message}`);
+  }
 }
 
 function createTray() {
@@ -312,6 +358,16 @@ function setupSignaling() {
 
   sig.on('browser-ready', async (msg) => {
     log(`Browser ready for session: ${msg.sessionId}`);
+    // CRÍTICO: ocultar la UI del agente en cuanto entra una sesión. Si quedaba
+    // visible en el PC remoto y el operador hacía un clic encima, podía dar a
+    // "Reconectar" (que cierra el WS y mata la sesión activa) o a la X — por
+    // eso "el agente se desconecta al hacer clic". El usuario puede volver a
+    // mostrar la ventana desde el ícono de la bandeja.
+    try {
+      if (mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible()) {
+        mainWindow.hide();
+      }
+    } catch {}
     try {
       log(`Fetching ICE config from ${BACKEND_HTTP_URL}/api/sessions/ice-config`);
       const res = await fetch(`${BACKEND_HTTP_URL}/api/sessions/ice-config`);
@@ -345,6 +401,10 @@ function setupSignaling() {
     updateTrayMenu();
     updateMainWindowStatus();
     hiddenWindow?.webContents.send('signal', msg);
+    // Si el navegador dejó la sesión con botones/teclas presionadas (por ejemplo
+    // un drag que cortó la conexión), aquí soltamos todo para no dejar el PC
+    // remoto arrastrando ventanas o con teclas atascadas.
+    try { releaseAll(); } catch {}
   });
 }
 
@@ -372,8 +432,20 @@ app.whenReady().then(async () => {
 
   ipcMain.on('input', async (_e, msg) => {
     const display = screen.getPrimaryDisplay();
-    const { width, height } = display.bounds;
+    // CRÍTICO: bounds/size están en DIPs (puntos lógicos). robotjs en Windows
+    // posiciona el cursor en píxeles FÍSICOS. En pantallas con DPI scaling
+    // (125%, 150%, 4K) sin esta multiplicación el cursor solo alcanzaba una
+    // fracción de la pantalla y aparecía desalineado vs el cursor local.
+    const sf = display.scaleFactor || 1;
+    const width = Math.round(display.size.width * sf);
+    const height = Math.round(display.size.height * sf);
     await handleInput(msg, width, height);
+  });
+
+  // El renderer llama a esto cuando una RTCPeerConnection se cierra o falla,
+  // para garantizar que no queden botones de mouse o teclas atascadas.
+  ipcMain.on('release-inputs', () => {
+    try { releaseAll(); } catch {}
   });
 
   ipcMain.on('renderer-log', (_e, msg) => {
@@ -413,6 +485,9 @@ app.whenReady().then(async () => {
   createMainWindow();
   createHiddenWindow();
   createTray();
+
+  // Registrar arranque automático con Windows (oculto, solo bandeja).
+  ensureAutoStart();
 
   // Registrar dispositivo en el backend
   await registerDevice();

@@ -29,6 +29,18 @@
     return getBaseURL().replace(/^https:/, 'wss:').replace(/^http:/, 'ws:') + '/ws';
   }
 
+  // Google OAuth Client ID — configurable desde la consola del navegador o
+  // mediante el campo del login. Si el usuario no lo setea, se usa el default
+  // de abajo (que el dueño del proyecto debe reemplazar por el suyo en Google Cloud).
+  const DEFAULT_GOOGLE_CLIENT_ID = '';
+  function getGoogleClientId() {
+    try { return localStorage.getItem('DPS_GOOGLE_CLIENT_ID') || DEFAULT_GOOGLE_CLIENT_ID; }
+    catch { return DEFAULT_GOOGLE_CLIENT_ID; }
+  }
+  function setGoogleClientId(id) {
+    try { localStorage.setItem('DPS_GOOGLE_CLIENT_ID', id || ''); } catch {}
+  }
+
   async function request(path, options = {}) {
     const url = getBaseURL() + path;
     const headers = Object.assign({ 'Content-Type': 'application/json' }, options.headers || {});
@@ -55,6 +67,14 @@
   async function me() {
     return request('/api/auth/me');
   }
+  async function loginWithGoogle(credential) {
+    const r = await request('/api/auth/google', {
+      method: 'POST',
+      body: JSON.stringify({ credential }),
+    });
+    if (r && r.token) setToken(r.token);
+    return r;
+  }
 
   // ── Sessions (WebRTC) ───────────────────────────────────────────────────
   async function createSession(posId) {
@@ -68,26 +88,69 @@
   }
 
   // ── Altas (empresa / local / pos) ───────────────────────────────────────
+  // El backend exige los nombres exactos { id, nombre } / { id, empresa_id, nombre } /
+  // { id, numero, local_id, empresa_id }. Aquí traducimos la forma "amistosa"
+  // que usan los componentes (sucursalId, empresaId, codigo, rustdeskId) a esos
+  // nombres canónicos para evitar 400s.
   async function createEmpresa(payload) {
+    const body = {
+      id: payload.id || payload.sucursalId,
+      nombre: payload.nombre,
+    };
     return request('/api/devices/empresas', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   }
   async function createLocal(payload) {
+    const body = {
+      id: payload.id || payload.codigo,
+      empresa_id: payload.empresa_id || payload.empresaId,
+      nombre: payload.nombre,
+    };
     return request('/api/devices/locales', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   }
   async function createPos(payload) {
+    const body = {
+      id: payload.id || payload.rustdeskId,
+      numero: payload.numero != null ? payload.numero : 1,
+      local_id: payload.local_id || payload.localId,
+      empresa_id: payload.empresa_id || payload.empresaId,
+    };
     return request('/api/devices/pos', {
       method: 'POST',
-      body: JSON.stringify(payload),
+      body: JSON.stringify(body),
     });
   }
   async function deletePos(posId) {
     return request('/api/devices/pos/' + encodeURIComponent(posId), { method: 'DELETE' });
+  }
+  async function deleteLocal(localId) {
+    return request('/api/devices/locales/' + encodeURIComponent(localId), { method: 'DELETE' });
+  }
+  async function deleteEmpresa(empresaId) {
+    return request('/api/devices/empresas/' + encodeURIComponent(empresaId), { method: 'DELETE' });
+  }
+  async function updateEmpresa(empresaId, payload) {
+    return request('/api/devices/empresas/' + encodeURIComponent(empresaId), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+  async function updateLocal(localId, payload) {
+    return request('/api/devices/locales/' + encodeURIComponent(localId), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
+  }
+  async function updatePos(posId, payload) {
+    return request('/api/devices/pos/' + encodeURIComponent(posId), {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    });
   }
 
   // ── Network data — devuelve la forma de window.MOCK ─────────────────────
@@ -151,17 +214,56 @@
       status: p.estado === 'online' ? 'online' : 'offline',
       name: p.numero != null ? ('POS-' + p.numero) : p.id,
       lastSeen: p.ultimaActividadMin != null ? ('hace ' + p.ultimaActividadMin + ' min') : '',
+      os: p.os || '',
+      client: p.client || (p.version ? 'DPS Desk ' + p.version : ''),
+      cpu: p.cpu ?? '—',
+      ram: p.ram ?? '—',
+      uptime: p.uptime || '—',
+      latency: p.latency ?? '—',
     }));
 
-    return { COMPANIES, LOCALES, DEVICES };
+    // Estructura jerárquica que consume la pantalla Network (v2).
+    // Los contadores online/offline se recalculan a partir del estado en vivo
+    // de cada DEVICE (que ahora refleja la conexión WS del agente en el backend),
+    // no de los campos agregados del backend que pueden estar desactualizados.
+    const COMPANIES_FULL = COMPANIES.map((c) => {
+      let coOnline = 0, coTotal = 0;
+      const locsForCo = LOCALES.filter((l) => l.company === c.name).map((l) => {
+        const devs = DEVICES.filter((d) => d.company === c.name && d.localCod === l.cod);
+        const onlineCount = devs.filter((d) => d.status === 'online').length;
+        coOnline += onlineCount;
+        coTotal += devs.length;
+        return {
+          id: c.name + '-' + l.cod,
+          name: l.name,
+          address: (l.city || '') + (l.cod ? ' · cod ' + l.cod : ''),
+          total: devs.length,
+          online: onlineCount,
+          offline: devs.length - onlineCount,
+          devices: devs,
+        };
+      });
+      return {
+        id: c.name,
+        name: c.name,
+        totalPos: coTotal,
+        online: coOnline,
+        offline: coTotal - coOnline,
+        locations: locsForCo,
+      };
+    });
+
+    return { COMPANIES, LOCALES, DEVICES, COMPANIES_FULL };
   }
 
   window.API = {
     getBaseURL, setBaseURL, getWSUrl,
     getToken, setToken, clearToken,
-    login, me,
+    getGoogleClientId, setGoogleClientId,
+    login, me, loginWithGoogle,
     createSession, deleteSession,
-    createEmpresa, createLocal, createPos, deletePos,
+    createEmpresa, createLocal, createPos, deletePos, deleteLocal, deleteEmpresa,
+    updateEmpresa, updateLocal, updatePos,
     getNetworkData,
   };
 })();

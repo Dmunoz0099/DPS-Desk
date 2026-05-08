@@ -87,7 +87,7 @@ const server = http.createServer(app);
 
 // ── WebSocket Signaling Server ───────────────────────────────────────────────
 const rooms = new Map();
-const HEARTBEAT_INTERVAL = 30000;
+const HEARTBEAT_INTERVAL = 10000;
 
 function getOrCreateRoom(id) {
   if (!rooms.has(id)) {

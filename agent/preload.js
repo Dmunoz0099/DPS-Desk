@@ -10,6 +10,7 @@ contextBridge.exposeInMainWorld('agent', {
   onSignal: (fn) => ipcRenderer.on('signal', (_e, msg) => fn(msg)),
   sendSignal: (msg) => ipcRenderer.send('signal-out', msg),
   sendInput: (msg) => ipcRenderer.send('input', msg),
+  releaseInputs: () => ipcRenderer.send('release-inputs'),
   getPosId: () => ipcRenderer.sendSync('get-posid'),
   getDesktopSources: () => ipcRenderer.invoke('get-desktop-sources'),
   log: (msg) => ipcRenderer.send('renderer-log', msg),
