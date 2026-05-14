@@ -21,6 +21,11 @@ app.use(cors({
   origin: corsOrigins,
   credentials: corsOrigin !== '*',
 }));
+// Requerido por Google Sign-In (popup flow) para que postMessage cruce origen
+app.use((_req, res, next) => {
+  res.setHeader('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  next();
+});
 app.use(express.json({ limit: '1mb' }));
 
 // ── Logging middleware ───────────────────────────────────────────────────────
