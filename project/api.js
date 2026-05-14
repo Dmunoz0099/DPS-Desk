@@ -7,7 +7,7 @@
 // a window.MOCK.COMPANIES / .LOCALES / .DEVICES.
 // =============================================================
 (function () {
-  const DEFAULT_BASE = 'http://localhost:4000';
+  const DEFAULT_BASE = 'https://dps-desk.onrender.com';
 
   function getBaseURL() {
     try { return localStorage.getItem('DPS_API_URL') || DEFAULT_BASE; }
