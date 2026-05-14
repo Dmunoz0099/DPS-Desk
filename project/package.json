@@ -1,0 +1,10 @@
+{
+  "name": "dpsdesk-frontend",
+  "version": "1.0.0",
+  "scripts": {
+    "start": "npx kill-port 8080 && npx serve . -p 8080"
+  },
+  "dependencies": {
+    "express": "^5.2.1"
+  }
+}

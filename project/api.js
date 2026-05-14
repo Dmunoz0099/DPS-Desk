@@ -7,7 +7,7 @@
 // a window.MOCK.COMPANIES / .LOCALES / .DEVICES.
 // =============================================================
 (function () {
-  const DEFAULT_BASE = 'https://backend-production-a5b7d.up.railway.app';
+  const DEFAULT_BASE = 'http://localhost:4000';
 
   function getBaseURL() {
     try { return localStorage.getItem('DPS_API_URL') || DEFAULT_BASE; }
@@ -32,7 +32,7 @@
   // Google OAuth Client ID — configurable desde la consola del navegador o
   // mediante el campo del login. Si el usuario no lo setea, se usa el default
   // de abajo (que el dueño del proyecto debe reemplazar por el suyo en Google Cloud).
-  const DEFAULT_GOOGLE_CLIENT_ID = '';
+  const DEFAULT_GOOGLE_CLIENT_ID = '744081716102-e92n23ser1vmspsf61gn3o2a9v1u4pj0.apps.googleusercontent.com';
   function getGoogleClientId() {
     try { return localStorage.getItem('DPS_GOOGLE_CLIENT_ID') || DEFAULT_GOOGLE_CLIENT_ID; }
     catch { return DEFAULT_GOOGLE_CLIENT_ID; }
