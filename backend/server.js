@@ -12,14 +12,13 @@ const { deleteSessionRowsOlderThan } = require('./db/supabase');
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// CORS para navegador + Electron
-const corsOrigin = process.env.CORS_ORIGIN || '*';
-const corsOrigins = corsOrigin === '*'
-  ? true
-  : corsOrigin.split(',').map(s => s.trim());
+// CORS para navegador + Electron — usa Bearer token (no cookies), origen abierto es seguro
+const allowedOrigins = process.env.CORS_ORIGIN;
 app.use(cors({
-  origin: corsOrigins,
-  credentials: corsOrigin !== '*',
+  origin: (!allowedOrigins || allowedOrigins === '*')
+    ? true
+    : allowedOrigins.split(',').map(s => s.trim()),
+  credentials: false,
 }));
 // Requerido por Google Sign-In (popup flow) para que postMessage cruce origen
 app.use((_req, res, next) => {
