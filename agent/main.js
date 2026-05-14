@@ -30,8 +30,8 @@ function loadEnv() {
 }
 const loadedEnvPath = loadEnv();
 
-const DEFAULT_BACKEND = 'https://backend-production-a5b7d.up.railway.app';
-const DEFAULT_SIGNALING = 'wss://backend-production-a5b7d.up.railway.app';
+const DEFAULT_BACKEND = 'https://dps-desk.onrender.com';
+const DEFAULT_SIGNALING = 'wss://dps-desk.onrender.com';
 const SIGNALING_URL = process.env.SIGNALING_URL || DEFAULT_SIGNALING;
 const BACKEND_HTTP_URL = process.env.BACKEND_HTTP_URL || DEFAULT_BACKEND;
 
