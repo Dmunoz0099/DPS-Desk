@@ -11,8 +11,8 @@ services:
         value: production
       - key: JWT_SECRET
         generateValue: true
-      - key: CORS_ORIGIN
-        value: "*"
+      # Render expone RENDER_EXTERNAL_URL automáticamente; el código lo usa para
+      # auto-ping cada 10 min y evitar el spin-down del free tier.
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_ANON_KEY

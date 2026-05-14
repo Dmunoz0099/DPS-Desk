@@ -47,8 +47,17 @@ SUPABASE_URL=https://<tu-proyecto>.supabase.co
 SUPABASE_ANON_KEY=<anon-key>
 SUPABASE_SERVICE_KEY=<service-role-key>
 JWT_SECRET=cambia_esto_en_prod
-CORS_ORIGIN=*                              # en prod restringir
+# CORS_ORIGIN=*   # opcional, default: abierto (usa Bearer tokens)
 ```
+
+### Despliegue en Render
+
+El proyecto incluye un `render.yaml` listo. En Render dashboard:
+1. New → Web Service → conecta tu repo de GitHub.
+2. Render detecta el `render.yaml` automáticamente.
+3. Agrega manualmente las variables `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_KEY` en Environment.
+
+El backend hace auto-ping cada 10 min usando `RENDER_EXTERNAL_URL` para evitar el spin-down del free tier (15 min sin requests = sleep).
 
 Verás:
 
@@ -134,12 +143,18 @@ cp .env.example .env   # apuntar al backend
 npm start
 ```
 
-Variables clave de `agent/.env`:
+Variables clave de `agent/.env` (apuntando a Render por defecto):
 
 ```ini
-SIGNALING_URL=ws://localhost:4000
-BACKEND_HTTP_URL=http://localhost:4000
+SIGNALING_URL=wss://dps-desk.onrender.com
+BACKEND_HTTP_URL=https://dps-desk.onrender.com
 # POS_ID=...   # opcional: ID fijo en vez del UUID generado
+```
+
+Para desarrollo local, comenta las anteriores y descomenta:
+```ini
+# SIGNALING_URL=ws://localhost:4000
+# BACKEND_HTTP_URL=http://localhost:4000
 ```
 
 El primer arranque genera un `pos_id` (UUID) persistente y registra el dispositivo vía `POST /api/devices/register`. A partir de ahí aparece en `GET /api/devices/registered` y, por tanto, en el frontend bajo la empresa virtual **Agent DPS**.

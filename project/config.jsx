@@ -142,7 +142,7 @@ function SecuritySection() {
 }
 
 function NetworkConfig() {
-  const initialEndpoint = (window.API && window.API.getBaseURL && window.API.getBaseURL()) || 'https://backend-production-a5b7d.up.railway.app';
+  const initialEndpoint = (window.API && window.API.getBaseURL && window.API.getBaseURL()) || 'https://dps-desk.onrender.com';
   const [cfg, setCfg] = useState({
     endpoint: initialEndpoint,
     secret: '••••••••••••••••',

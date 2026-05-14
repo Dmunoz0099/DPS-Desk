@@ -1,7 +1,6 @@
 require('dotenv').config();
 const http = require('http');
 const express = require('express');
-const cors = require('cors');
 const { WebSocketServer, WebSocket } = require('ws');
 
 const { router: devicesRouter, setDeviceOnline } = require('./routes/devices');
@@ -315,5 +314,20 @@ server.listen(PORT, () => {
   console.log(`║  WS   : ws://localhost:${PORT}/ws                         ║`);
   console.log(`╚═══════════════════════════════════════════════════════╝`);
 });
+
+// ── Keep-alive para Render free tier ─────────────────────────────────────────
+// Render hace spin-down después de 15 min sin requests. Esto se pinguea a sí
+// mismo cada 10 min para evitar que el servicio se duerma y rompa las sesiones
+// WS de los agents. Se activa solo cuando SELF_URL está seteado (en Render
+// dashboard apuntando a https://dps-desk.onrender.com).
+const SELF_URL = process.env.SELF_URL || process.env.RENDER_EXTERNAL_URL;
+if (SELF_URL) {
+  setInterval(() => {
+    fetch(`${SELF_URL}/api/health`)
+      .then(() => console.log('[KeepAlive] self-ping ok'))
+      .catch((err) => console.warn('[KeepAlive] self-ping failed:', err.message));
+  }, 10 * 60 * 1000);
+  console.log(`[KeepAlive] self-ping enabled → ${SELF_URL}/api/health (cada 10 min)`);
+}
 
 module.exports = { rooms };
